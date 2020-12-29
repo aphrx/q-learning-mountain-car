@@ -1,10 +1,13 @@
 import gym
 import numpy as np
+import matplotlib.pyplot as plt
+
 env = gym.make('MountainCar-v0')
 
 LEARNING_RATE = 0.1
 DISCOUNT = 0.95
-EPISODES = 25000
+EPISODES = 1000
+SHOW_EVERY = 100
 DISCRETE_OS_SIZE = [20] * len(env.observation_space.high)
 
 epsilon = 0.5
@@ -17,12 +20,17 @@ epsilon_decay_value = epsilon/(END_EPSILON_DECAY-START_EPSILON_DECAY)
 
 q_table = np.random.uniform(low=-2, high=0, size=(DISCRETE_OS_SIZE + [env.action_space.n]))
 
+ep_rewards = []
+aggr_ep_rewards = {'ep': [], 'avg': [], 'min': [], 'max': []}
+
+
 def get_discrete_state(state):
     discrete_state = (state - env.observation_space.low)/discrete_os_win_size
     return tuple(discrete_state.astype(np.int))
 
 for episode in range(EPISODES):
-    print("Episode " + str(episode))
+    episode_reward = 0
+    #print("Episode " + str(episode))
     discrete_state = get_discrete_state(env.reset())
     done = False
     while not done:
@@ -31,9 +39,11 @@ for episode in range(EPISODES):
         else:
             action = np.random.randint(0, env.action_space.n)
         new_state, reward, done, _ = env.step(action)
+        episode_reward += reward
         new_discrete_state = get_discrete_state(new_state)
-        if episode % 100 == 0:
-            env.render()
+        #if episode % SHOW_EVERY == 0:
+            #print("Episode " + str(episode))
+            #env.render()
 
         if not done:
             max_future_q = np.max(q_table[new_discrete_state])
@@ -42,6 +52,7 @@ for episode in range(EPISODES):
             new_q = (1-LEARNING_RATE) * current_q + LEARNING_RATE * (reward + DISCOUNT * max_future_q)
             q_table[discrete_state+(action, )] = new_q
         elif new_state[0] >= env.goal_position:
+            #print("Reached goal!")
             q_table[discrete_state + (action, )] = 0
         
         discrete_state = new_discrete_state
@@ -49,4 +60,21 @@ for episode in range(EPISODES):
     if END_EPSILON_DECAY >= episode >= START_EPSILON_DECAY:
         epsilon -= epsilon_decay_value 
 
+    ep_rewards.append(episode_reward)
+
+    if not episode % SHOW_EVERY:
+        average_reward = sum(ep_rewards[-SHOW_EVERY:])/len(ep_rewards[-SHOW_EVERY:])
+        aggr_ep_rewards['ep'].append(episode)
+        aggr_ep_rewards['avg'].append(average_reward)
+        aggr_ep_rewards['min'].append(min(ep_rewards[-SHOW_EVERY:]))
+        aggr_ep_rewards['max'].append(max(ep_rewards[-SHOW_EVERY:]))
+
+        print(f"Episode: {episode} Avg: {average_reward} Min: {min(ep_rewards[-SHOW_EVERY:])} Max: {max(ep_rewards[-SHOW_EVERY:])}")
+
 env.close()
+
+plt.plot(aggr_ep_rewards['ep'], aggr_ep_rewards['avg'], label="Average")
+plt.plot(aggr_ep_rewards['ep'], aggr_ep_rewards['min'], label="Minimum")
+plt.plot(aggr_ep_rewards['ep'], aggr_ep_rewards['max'], label="Maximum")
+plt.legend(loc=4)
+plt.show()
